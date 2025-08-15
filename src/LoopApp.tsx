@@ -1,666 +1,354 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Users, BarChart3, Settings, Info, Plus, Check, X, Star, DollarSign } from 'lucide-react';
 
-const LoopApp = () => {
-  const [activeTab, setActiveTab] = useState('board');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [hideCompleted, setHideCompleted] = useState(false);
-  const [isManageLocked, setIsManageLocked] = useState(true);
-  const [pinInput, setPinInput] = useState('');
-  const [showPinModal, setShowPinModal] = useState(false);
+import React, { useMemo, useState } from "react";
+import {
+  Calendar as CalendarIcon,
+  Users,
+  BarChart3,
+  Settings,
+  Info,
+  Check,
+  X,
+  Plus,
+  Star,
+  DollarSign,
+} from "lucide-react";
 
-  // App state
-  const [kids, setKids] = useState([
-    { id: 1, name: 'Emma', avatar: '👧', centsPerPoint: null },
-    { id: 2, name: 'Liam', avatar: '👦', centsPerPoint: null }
+/** Types */
+type Kid = { id: number; name: string; avatar: string; centsPerPoint: number | null };
+type Task = { id: number; title: string; points: number; daysOfWeek: number[]; active: boolean };
+type Completion = { kidId: number; taskId: number; date: string; approved: boolean };
+
+/** Helpers */
+const todayStr = () => new Date().toISOString().split("T")[0];
+const formatCurrency = (cents: number) =>
+  new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
+
+/** Main Component */
+const LoopApp: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"board" | "calendar" | "reports" | "manage" | "info">("board");
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr());
+  const [kids, setKids] = useState<Kid[]>([
+    { id: 1, name: "Emma", avatar: "👧", centsPerPoint: 5 },
+    { id: 2, name: "Liam", avatar: "👦", centsPerPoint: 5 },
   ]);
-
-  const [tasks, setTasks] = useState([
-    { id: 1, name: 'Make bed', defaultPoints: 2, frequency: 'daily', daysOfWeek: [1,2,3,4,5,6,7], assignedKidIds: [1,2] },
-    { id: 2, name: 'Brush teeth', defaultPoints: 1, frequency: 'daily', daysOfWeek: [1,2,3,4,5,6,7], assignedKidIds: [1,2] },
-    { id: 3, name: 'Clean room', defaultPoints: 5, frequency: 'weekly', daysOfWeek: [6], assignedKidIds: [1] },
-    { id: 4, name: 'Feed pet', defaultPoints: 3, frequency: 'daily', daysOfWeek: [1,2,3,4,5,6,7], assignedKidIds: [2] }
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: 1, title: "Make bed", points: 2, daysOfWeek: [1,2,3,4,5,6,7], active: true },
+    { id: 2, title: "Dishes", points: 3, daysOfWeek: [1,2,3,4,5,6,7], active: true },
   ]);
+  const [completions, setCompletions] = useState<Completion[]>([]);
 
-  const [completions, setCompletions] = useState([]);
-  const [adjustments, setAdjustments] = useState([]);
-  const [bonuses, setBonuses] = useState([]);
-  const [payouts, setPayouts] = useState([]);
-  const [settings, setSettings] = useState({ moneyPerPoint: 25 }); // 25 cents per point
-
-  // Kid avatars
-  const kidAvatars = ['👧', '👦', '🧒', '👶', '🧑', '👨', '👩', '🙎‍♂️', '🙎‍♀️', '👱‍♂️', '👱‍♀️', '🦱'];
-
-  // Form states
-  const [newKid, setNewKid] = useState({ name: '', avatar: '👧' });
-  const [newTask, setNewTask] = useState({
-    name: '', 
-    defaultPoints: 1, 
-    frequency: 'daily', 
-    daysOfWeek: [1,2,3,4,5,6,7], 
-    assignedKidIds: []
+  // Manage modal state
+  const [newTask, setNewTask] = useState<{ title: string; points: number; daysOfWeek: number[] }>({
+    title: "",
+    points: 1,
+    daysOfWeek: [1,2,3,4,5,6,7],
   });
-  const [adjustmentReason, setAdjustmentReason] = useState('');
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
-  const [adjustmentData, setAdjustmentData] = useState({ kidId: null, delta: 0 });
+  const [newKid, setNewKid] = useState<{ name: string; avatar: string; centsPerPoint: number | null }>({
+    name: "",
+    avatar: "🙂",
+    centsPerPoint: 5,
+  });
 
-  const PIN = '1234';
+  /** Derived data */
+  const tasksForDate = useMemo(() => {
+    const weekday = (new Date(selectedDate).getDay() + 6) % 7 + 1; // Mon=1..Sun=7
+    return tasks.filter((t) => t.active && t.daysOfWeek.includes(weekday));
+  }, [tasks, selectedDate]);
 
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const isComplete = (kidId: number, taskId: number, date: string) =>
+    completions.some((c) => c.kidId === kidId && c.taskId === taskId && c.date === date);
 
-  // Helper functions
-  const isTaskDueOnDate = (task, date) => {
-    const dayOfWeek = new Date(date).getDay();
-    const adjustedDay = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday from 0 to 7
-    
-    if (task.frequency === 'daily') {
-      return task.daysOfWeek.includes(adjustedDay);
-    } else if (task.frequency === 'weekly') {
-      return task.daysOfWeek.includes(adjustedDay);
-    }
-    return false;
+  const toggleComplete = (kidId: number, taskId: number, date: string) => {
+    setCompletions((prev) => {
+      const exists = prev.find((c) => c.kidId === kidId && c.taskId === taskId && c.date === date);
+      if (exists) return prev.filter((c) => !(c.kidId === kidId && c.taskId === taskId && c.date === date));
+      return [...prev, { kidId, taskId, date, approved: true }];
+    });
   };
 
-  const isTaskCompleted = (taskId, kidId, date) => {
-    return completions.some(c => 
-      c.taskId === taskId && c.kidId === kidId && c.dateISO === date
-    );
-  };
-
-  const toggleTaskCompletion = (taskId, kidId, date) => {
-    const isCompleted = isTaskCompleted(taskId, kidId, date);
-    
-    if (isCompleted) {
-      setCompletions(prev => 
-        prev.filter(c => !(c.taskId === taskId && c.kidId === kidId && c.dateISO === date))
-      );
-    } else {
-      setCompletions(prev => [...prev, { taskId, kidId, dateISO: date }]);
-    }
-  };
-
-  const getTasksForKidOnDate = (kidId, date) => {
-    return tasks.filter(task => 
-      task.assignedKidIds.includes(kidId) && isTaskDueOnDate(task, date)
-    );
-  };
-
-  const getPointsForKidOnDate = (kidId, date) => {
-    const kidTasks = getTasksForKidOnDate(kidId, date);
-    const completedPoints = kidTasks.reduce((total, task) => {
-      if (isTaskCompleted(task.id, kidId, date)) {
-        return total + task.defaultPoints;
-      }
-      return total;
-    }, 0);
-
-    const dayAdjustments = adjustments
-      .filter(adj => adj.kidId === kidId && adj.createdISO.startsWith(date))
-      .reduce((total, adj) => total + adj.deltaPoints, 0);
-
-    const dayBonuses = bonuses
-      .filter(bonus => bonus.kidId === kidId && bonus.dateISO === date)
-      .reduce((total, bonus) => total + bonus.points, 0);
-
-    return completedPoints + dayAdjustments + dayBonuses;
-  };
-
-  const areAllTasksCompletedForKidOnDate = (kidId, date) => {
-    const kidTasks = getTasksForKidOnDate(kidId, date);
-    return kidTasks.length > 0 && kidTasks.every(task => isTaskCompleted(task.id, kidId, date));
-  };
-
-  const addKid = () => {
-    if (newKid.name.trim()) {
-      const id = Math.max(...kids.map(k => k.id), 0) + 1;
-      setKids(prev => [...prev, { ...newKid, id, centsPerPoint: null }]);
-      setNewKid({ name: '', avatar: '👧' });
-    }
-  };
-
-  const addTask = () => {
-    if (newTask.name.trim()) {
-      const id = Math.max(...tasks.map(t => t.id), 0) + 1;
-      setTasks(prev => [...prev, { ...newTask, id }]);
-      setNewTask({
-        name: '', 
-        defaultPoints: 1, 
-        frequency: 'daily', 
-        daysOfWeek: [1,2,3,4,5,6,7], 
-        assignedKidIds: []
-      });
-    }
-  };
-
-  const handleAdjustment = (kidId, delta) => {
-    setAdjustmentData({ kidId, delta });
-    setShowAdjustmentModal(true);
-  };
-
-  const submitAdjustment = () => {
-    if (adjustmentReason.trim()) {
-      const adjustment = {
-        kidId: adjustmentData.kidId,
-        deltaPoints: adjustmentData.delta,
-        reason: adjustmentReason,
-        createdISO: new Date().toISOString()
-      };
-      setAdjustments(prev => [...prev, adjustment]);
-      setAdjustmentReason('');
-      setShowAdjustmentModal(false);
-      setAdjustmentData({ kidId: null, delta: 0 });
-    }
-  };
-
-  const handlePayout = (kidId) => {
-    // Calculate net points for this kid
-    const netPoints = calculateNetPoints(kidId);
-    if (netPoints > 0) {
-      const payout = {
-        kidId,
-        createdISO: new Date().toISOString(),
-        points: netPoints,
-        dollarsAtTime: (netPoints * settings.moneyPerPoint) / 100,
-        rateCentsAtTime: settings.moneyPerPoint
-      };
-      setPayouts(prev => [...prev, payout]);
-    }
-  };
-
-  const calculateNetPoints = (kidId) => {
-    const taskPoints = completions
-      .filter(c => c.kidId === kidId)
-      .reduce((total, completion) => {
-        const task = tasks.find(t => t.id === completion.taskId);
-        return total + (task ? task.defaultPoints : 0);
+  const pointsForKidOnDate = (kidId: number, date: string) =>
+    completions
+      .filter((c) => c.kidId === kidId && c.date === date && c.approved)
+      .reduce((sum, c) => {
+        const t = tasks.find((t) => t.id === c.taskId);
+        return sum + (t?.points ?? 0);
       }, 0);
 
-    const adjustmentPoints = adjustments
-      .filter(adj => adj.kidId === kidId)
-      .reduce((total, adj) => total + adj.deltaPoints, 0);
+  const lifetimePoints = (kidId: number) =>
+    completions
+      .filter((c) => c.kidId === kidId && c.approved)
+      .reduce((sum, c) => {
+        const t = tasks.find((t) => t.id === c.taskId);
+        return sum + (t?.points ?? 0);
+      }, 0);
 
-    const bonusPoints = bonuses
-      .filter(bonus => bonus.kidId === kidId)
-      .reduce((total, bonus) => total + bonus.points, 0);
+  /** UI sections */
+  const TabButton: React.FC<{ id: typeof activeTab; icon: React.ReactNode; label: string }> = ({
+    id,
+    icon,
+    label,
+  }) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition ${
+        activeTab === id ? "bg-indigo-600 text-white" : "bg-white/70 hover:bg-white"
+      }`}
+    >
+      <span className="w-4 h-4">{icon}</span>
+      {label}
+    </button>
+  );
 
-    const paidPoints = payouts
-      .filter(payout => payout.kidId === kidId)
-      .reduce((total, payout) => total + payout.points, 0);
-
-    return taskPoints + adjustmentPoints + bonusPoints - paidPoints;
-  };
-
-  const unlockManage = () => {
-    if (pinInput === PIN) {
-      setIsManageLocked(false);
-      setShowPinModal(false);
-      setPinInput('');
-    } else {
-      alert('Incorrect PIN');
-      setPinInput('');
-    }
-  };
-
-  const renderLogo = () => (
-    <div className="text-center">
-      <div className="text-3xl font-bold text-white mb-1" style={{fontFamily: 'Candara, sans-serif'}}>
-        L<span className="inline-block transform rotate-90">∞</span><span className="inline-block transform rotate-90">∞</span>p
+  const renderHeader = () => (
+    <div className="sticky top-0 z-10 bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white px-4 py-3">
+      <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="text-2xl font-extrabold tracking-tight">Loop</div>
+          <div className="text-xs opacity-90">Do it. Earn it. Repeat it.</div>
+        </div>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="rounded bg-white/10 px-2 py-1 text-sm outline-none ring-1 ring-white/30"
+        />
       </div>
-      <div className="text-sm text-white opacity-90" style={{fontFamily: 'Candara, sans-serif'}}>
-        Do it. Earn it. Repeat it.
-      </div>
+    </div>
+  );
+
+  const renderTabs = () => (
+    <div className="max-w-6xl mx-auto mt-3 px-4 flex flex-wrap gap-2">
+      <TabButton id="board" icon={<Users className="w-4 h-4" />} label="Board" />
+      <TabButton id="calendar" icon={<CalendarIcon className="w-4 h-4" />} label="Calendar" />
+      <TabButton id="reports" icon={<BarChart3 className="w-4 h-4" />} label="Reports" />
+      <TabButton id="manage" icon={<Settings className="w-4 h-4" />} label="Manage" />
+      <TabButton id="info" icon={<Info className="w-4 h-4" />} label="Info" />
     </div>
   );
 
   const renderBoard = () => (
-    <div className="p-4" style={{fontFamily: 'Candara, sans-serif'}}>
-      <div className="mb-4 flex items-center gap-4 flex-wrap">
-        <div>
-          <label className="block text-sm font-medium mb-1">Date:</label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
-            style={{fontFamily: 'Candara, sans-serif'}}
-          />
-        </div>
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="hideCompleted"
-            checked={hideCompleted}
-            onChange={(e) => setHideCompleted(e.target.checked)}
-            className="mr-2"
-          />
-          <label htmlFor="hideCompleted" className="text-sm">Hide completed</label>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {kids.map(kid => {
-          const kidTasks = getTasksForKidOnDate(kid.id, selectedDate);
-          const visibleTasks = hideCompleted ? 
-            kidTasks.filter(task => !isTaskCompleted(task.id, kid.id, selectedDate)) : 
-            kidTasks;
-
-          return (
-            <div key={kid.id} className="bg-white rounded-lg shadow-md p-4">
-              <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                <span className="text-2xl">{kid.avatar}</span>
-                <h3 className="font-semibold text-lg">{kid.name}</h3>
+    <div className="max-w-6xl mx-auto p-4">
+      <div className="grid md:grid-cols-2 gap-4">
+        {kids.map((kid) => (
+          <div key={kid.id} className="bg-white rounded-xl shadow p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">{kid.avatar}</div>
+                <div className="font-semibold">{kid.name}</div>
               </div>
-              
-              <div className="space-y-2">
-                {visibleTasks.map(task => {
-                  const isCompleted = isTaskCompleted(task.id, kid.id, selectedDate);
-                  return (
-                    <div
-                      key={task.id}
-                      onClick={() => toggleTaskCompletion(task.id, kid.id, selectedDate)}
-                      className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                        isCompleted 
-                          ? 'bg-green-100 text-white' 
-                          : 'bg-gray-50 hover:bg-gray-100'
-                      }`}
-                      style={{
-                        backgroundColor: isCompleted ? '#9CAF88' : '#f9fafb',
-                        color: isCompleted ? 'white' : 'black'
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                          isCompleted ? 'border-white bg-white' : 'border-gray-300'
-                        }`}>
-                          {isCompleted && <Check size={12} className="text-green-600" />}
-                        </div>
-                        <span className="font-medium">{task.name}</span>
-                      </div>
-                      <span className={`text-sm ${isCompleted ? 'text-white' : 'text-gray-500'}`}>
-                        +{task.defaultPoints}
-                      </span>
-                    </div>
-                  );
-                })}
-                {visibleTasks.length === 0 && (
-                  <p className="text-gray-500 text-center py-4">No tasks for today</p>
-                )}
+              <div className="text-sm text-gray-500">
+                Today: <span className="font-semibold">{pointsForKidOnDate(kid.id, selectedDate)}</span> pts
               </div>
             </div>
-          );
-        })}
+
+            <div className="space-y-2">
+              {tasksForDate.map((task) => {
+                const done = isComplete(kid.id, task.id, selectedDate);
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => toggleComplete(kid.id, task.id, selectedDate)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded border text-left transition ${
+                      done ? "bg-green-50 border-green-200" : "bg-white hover:bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4" />
+                      <div className="font-medium">{task.title}</div>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-500">{task.points} pts</span>
+                      {done ? <Check className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-gray-300" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 
-  const renderCalendar = () => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
-    const days = [];
-    for (let i = 0; i < 42; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      days.push(date);
-    }
-
-    return (
-      <div className="p-4" style={{fontFamily: 'Candara, sans-serif'}}>
-        <h2 className="text-2xl font-bold mb-4 text-center">
-          {today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-        </h2>
-        
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="p-2 text-center font-semibold text-gray-600">
-              {day}
-            </div>
-          ))}
-        </div>
-        
-        <div className="grid grid-cols-7 gap-1">
-          {days.map(date => {
-            const dateStr = date.toISOString().split('T')[0];
-            const isCurrentMonth = date.getMonth() === currentMonth;
-            const isToday = dateStr === new Date().toISOString().split('T')[0];
-            
-            return (
-              <div
-                key={dateStr}
-                className={`min-h-20 p-2 border rounded ${
-                  isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
-              >
-                <div className={`text-sm font-medium mb-1 ${
-                  isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
-                }`}>
-                  {date.getDate()}
-                </div>
-                
-                <div className="space-y-1 text-xs">
-                  {kids.map(kid => {
-                    const points = getPointsForKidOnDate(kid.id, dateStr);
-                    const allCompleted = areAllTasksCompletedForKidOnDate(kid.id, dateStr);
-                    
-                    if (points > 0) {
-                      return (
-                        <div key={kid.id} className="flex items-center gap-1">
-                          <span>{kid.name}: {points}</span>
-                          {allCompleted && <Star size={10} className="text-yellow-500 fill-current" />}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                </div>
-              </div>
-            );
-          })}
+  const renderCalendar = () => (
+    <div className="max-w-6xl mx-auto p-4">
+      <div className="bg-white rounded-xl shadow p-4">
+        <div className="mb-4 font-semibold">Pick a date to mark chores:</div>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="rounded border px-2 py-1"
+        />
+        <div className="text-sm text-gray-600 mt-3">
+          You&apos;re editing: <span className="font-semibold">{selectedDate}</span>
         </div>
       </div>
-    );
-  };
-
-  const renderManage = () => {
-    if (isManageLocked) {
-      return (
-        <div className="p-8 text-center" style={{fontFamily: 'Candara, sans-serif'}}>
-          <div className="max-w-md mx-auto">
-            <h2 className="text-2xl font-bold mb-4">Manage Settings</h2>
-            <p className="text-gray-600 mb-6">This section is locked for parents only.</p>
-            <button
-              onClick={() => setShowPinModal(true)}
-              className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
-              style={{fontFamily: 'Candara, sans-serif'}}
-            >
-              Enter Parent PIN
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="p-4 max-w-4xl mx-auto" style={{fontFamily: 'Candara, sans-serif'}}>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">Manage</h2>
-          <button
-            onClick={() => setIsManageLocked(true)}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm"
-          >
-            Lock Settings
-          </button>
-        </div>
-
-        {/* Kids Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-semibold mb-4">Kids</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <input
-              type="text"
-              placeholder="Kid name"
-              value={newKid.name}
-              onChange={(e) => setNewKid(prev => ({...prev, name: e.target.value}))}
-              className="px-3 py-2 border rounded-lg"
-              style={{fontFamily: 'Candara, sans-serif'}}
-            />
-            <div className="flex items-center gap-2">
-              <select
-                value={newKid.avatar}
-                onChange={(e) => setNewKid(prev => ({...prev, avatar: e.target.value}))}
-                className="px-3 py-2 border rounded-lg flex-1"
-                style={{fontFamily: 'Candara, sans-serif'}}
-              >
-                {kidAvatars.map(avatar => (
-                  <option key={avatar} value={avatar}>{avatar}</option>
-                ))}
-              </select>
-              <button
-                onClick={addKid}
-                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {kids.map(kid => (
-              <div key={kid.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="text-2xl">{kid.avatar}</span>
-                <span className="font-medium">{kid.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Tasks Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-semibold mb-4">Tasks</h3>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            <div>
-              <input
-                type="text"
-                placeholder="Task name"
-                value={newTask.name}
-                onChange={(e) => setNewTask(prev => ({...prev, name: e.target.value}))}
-                className="w-full px-3 py-2 border rounded-lg mb-3"
-                style={{fontFamily: 'Candara, sans-serif'}}
-              />
-              <input
-                type="number"
-                placeholder="Points"
-                min="1"
-                value={newTask.defaultPoints}
-                onChange={(e) => setNewTask(prev => ({...prev, defaultPoints: parseInt(e.target.value) || 1}))}
-                className="w-full px-3 py-2 border rounded-lg"
-                style={{fontFamily: 'Candara, sans-serif'}}
-              />
-            </div>
-            
-            <div>
-              <div className="mb-3">
-                <label className="block text-sm font-medium mb-2">Days of Week:</label>
-                <div className="flex flex-wrap gap-2">
-                  {dayNames.map((day, idx) => (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        const dayNum = idx + 1;
-                        setNewTask(prev => ({
-                          ...prev,
-                          daysOfWeek: prev.daysOfWeek.includes(dayNum)
-                            ? prev.daysOfWeek.filter(d => d !== dayNum)
-                            : [...prev.daysOfWeek, dayNum]
-                        }));
-                      }}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        newTask.daysOfWeek.includes(idx + 1)
-                          ? 'text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                      style={{
-                        backgroundColor: newTask.daysOfWeek.includes(idx + 1) ? '#9CAF88' : '',
-                        fontFamily: 'Candara, sans-serif'
-                      }}
-                    >
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="mb-3">
-                <label className="block text-sm font-medium mb-2">Assign to:</label>
-                <div className="flex flex-wrap gap-2">
-                  {kids.map(kid => (
-                    <button
-                      key={kid.id}
-                      onClick={() => {
-                        setNewTask(prev => ({
-                          ...prev,
-                          assignedKidIds: prev.assignedKidIds.includes(kid.id)
-                            ? prev.assignedKidIds.filter(id => id !== kid.id)
-                            : [...prev.assignedKidIds, kid.id]
-                        }));
-                      }}
-                      className={`px-3 py-1 rounded text-sm flex items-center gap-1 transition-colors ${
-                        newTask.assignedKidIds.includes(kid.id)
-                          ? 'text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                      style={{
-                        backgroundColor: newTask.assignedKidIds.includes(kid.id) ? '#9CAF88' : '',
-                        fontFamily: 'Candara, sans-serif'
-                      }}
-                    >
-                      <span>{kid.avatar}</span>
-                      <span>{kid.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <button
-            onClick={addTask}
-            disabled={!newTask.name.trim() || newTask.assignedKidIds.length === 0 || newTask.daysOfWeek.length === 0}
-            className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-300"
-            style={{fontFamily: 'Candara, sans-serif'}}
-          >
-            Add Task
-          </button>
-
-          <div className="mt-6">
-            <h4 className="font-semibold mb-3">Current Tasks:</h4>
-            <div className="space-y-2">
-              {tasks.map(task => (
-                <div key={task.id} className="p-3 bg-gray-50 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="font-medium">{task.name}</span>
-                      <span className="text-gray-600 ml-2">({task.defaultPoints} pts)</span>
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {task.daysOfWeek.map(d => dayNames[d-1]).join(', ')}
-                    </div>
-                  </div>
-                  <div className="mt-2 flex gap-1">
-                    {task.assignedKidIds.map(kidId => {
-                      const kid = kids.find(k => k.id === kidId);
-                      return kid ? (
-                        <span key={kidId} className="text-xs bg-gray-200 px-2 py-1 rounded flex items-center gap-1">
-                          {kid.avatar} {kid.name}
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Point Adjustments */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-semibold mb-4">Point Adjustments</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {kids.map(kid => (
-              <div key={kid.id} className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">{kid.avatar}</span>
-                  <span className="font-medium">{kid.name}</span>
-                </div>
-                
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {[1, 5, 10, 20].map(points => (
-                    <button
-                      key={points}
-                      onClick={() => handleAdjustment(kid.id, points)}
-                      className="bg-green-500 text-white py-2 px-3 rounded text-sm hover:bg-green-600 transition-colors"
-                      style={{fontFamily: 'Candara, sans-serif'}}
-                    >
-                      +{points}
-                    </button>
-                  ))}
-                </div>
-                
-                <div className="grid grid-cols-4 gap-2">
-                  {[1, 5, 10, 20].map(points => (
-                    <button
-                      key={points}
-                      onClick={() => handleAdjustment(kid.id, -points)}
-                      className="bg-red-500 text-white py-2 px-3 rounded text-sm hover:bg-red-600 transition-colors"
-                      style={{fontFamily: 'Candara, sans-serif'}}
-                    >
-                      -{points}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Settings */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-xl font-semibold mb-4">Settings</h3>
-          
-          <div className="max-w-sm">
-            <label className="block text-sm font-medium mb-2">Money per point (cents):</label>
-            <input
-              type="number"
-              min="1"
-              value={settings.moneyPerPoint}
-              onChange={(e) => setSettings(prev => ({...prev, moneyPerPoint: parseInt(e.target.value) || 25}))}
-              className="px-3 py-2 border rounded-lg w-full"
-              style={{fontFamily: 'Candara, sans-serif'}}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Currently: {settings.moneyPerPoint}¢ = ${(settings.moneyPerPoint / 100).toFixed(2)} per point
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
+    </div>
+  );
 
   const renderReports = () => (
-    <div className="p-4 max-w-6xl mx-auto" style={{fontFamily: 'Candara, sans-serif'}}>
-      <h2 className="text-2xl font-bold mb-6">Reports</h2>
-      
-      {/* Summary Table */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h3 className="text-xl font-semibold mb-4">Points Summary</h3>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b" style={{fontFamily: 'Candara, sans-serif'}}>
-                <th className="text-left py-3 px-4">Kid</th>
-                <th className="text-right py-3 px-4">Task Points</th>
-                <th className="text-right py-3 px-4">Adjustments</th>
-                <th className="text-right py-3 px-4">Streak Bonuses</th>
-                <th className="text-right py-3 px-4">Net Points</th>
-                <th className="text-right py-3 px-4">Earnings</th>
-                <th className="text-center py-3 px-4">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kids.map(kid => {
-                const netPoints = calculateNetPoints(kid.id);
-                const taskPoints = completions
-                  .filter(c => c.kidId === kid.id)
-                  .reduce((total, completion) => {
-                    const task = tasks.find(t => t.id === completion
+    <div className="max-w-6xl mx-auto p-4">
+      <div className="bg-white rounded-xl shadow p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart3 className="w-4 h-4" />
+          <div className="font-semibold">Totals</div>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="text-left text-gray-500 border-b">
+            <tr>
+              <th className="py-2">Kid</th>
+              <th className="py-2">Lifetime Points</th>
+              <th className="py-2">Estimated $</th>
+            </tr>
+          </thead>
+          <tbody>
+            {kids.map((kid) => {
+              const pts = lifetimePoints(kid.id);
+              const cents = kid.centsPerPoint ? pts * kid.centsPerPoint : 0;
+              return (
+                <tr key={kid.id} className="border-b last:border-b-0">
+                  <td className="py-2">{kid.name}</td>
+                  <td className="py-2">{pts}</td>
+                  <td className="py-2">{kid.centsPerPoint ? `${formatCurrency(cents)}` : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderManage = () => (
+    <div className="max-w-6xl mx-auto p-4 grid md:grid-cols-2 gap-4">
+      <div className="bg-white rounded-xl shadow p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Settings className="w-4 h-4" />
+          <div className="font-semibold">Add Task</div>
+        </div>
+        <div className="space-y-2">
+          <input
+            placeholder="Task name"
+            value={newTask.title}
+            onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+            className="w-full rounded border px-2 py-1"
+          />
+          <input
+            type="number"
+            min={1}
+            placeholder="Points"
+            value={newTask.points}
+            onChange={(e) => setNewTask({ ...newTask, points: Number(e.target.value || 0) })}
+            className="w-full rounded border px-2 py-1"
+          />
+          <button
+            onClick={() => {
+              if (!newTask.title.trim()) return;
+              setTasks((prev) => [
+                ...prev,
+                { id: prev.length ? Math.max(...prev.map((t) => t.id)) + 1 : 1, title: newTask.title.trim(), points: newTask.points || 1, daysOfWeek: newTask.daysOfWeek, active: true },
+              ]);
+              setNewTask({ title: "", points: 1, daysOfWeek: [1,2,3,4,5,6,7] });
+            }}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded"
+          >
+            <Plus className="w-4 h-4" /> Add Task
+          </button>
+        </div>
+
+        <div className="mt-4">
+          <div className="font-semibold mb-2">Existing Tasks</div>
+          <div className="space-y-2">
+            {tasks.map((t) => (
+              <div key={t.id} className="flex items-center justify-between border rounded px-2 py-1">
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4" />
+                  <div>{t.title}</div>
+                </div>
+                <div className="text-sm text-gray-500">{t.points} pts</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4" />
+          <div className="font-semibold">Add Kid</div>
+        </div>
+        <div className="space-y-2">
+          <input
+            placeholder="Name"
+            value={newKid.name}
+            onChange={(e) => setNewKid({ ...newKid, name: e.target.value })}
+            className="w-full rounded border px-2 py-1"
+          />
+          <input
+            placeholder="Avatar (emoji)"
+            value={newKid.avatar}
+            onChange={(e) => setNewKid({ ...newKid, avatar: e.target.value })}
+            className="w-full rounded border px-2 py-1"
+          />
+          <input
+            type="number"
+            placeholder="Cents per point (e.g., 5)"
+            value={newKid.centsPerPoint ?? 0}
+            onChange={(e) => setNewKid({ ...newKid, centsPerPoint: Number(e.target.value || 0) })}
+            className="w-full rounded border px-2 py-1"
+          />
+          <button
+            onClick={() => {
+              if (!newKid.name.trim()) return;
+              setKids((prev) => [
+                ...prev,
+                {
+                  id: prev.length ? Math.max(...prev.map((k) => k.id)) + 1 : 1,
+                  name: newKid.name.trim(),
+                  avatar: newKid.avatar || "🙂",
+                  centsPerPoint: newKid.centsPerPoint ?? null,
+                },
+              ]);
+              setNewKid({ name: "", avatar: "🙂", centsPerPoint: 5 });
+            }}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded"
+          >
+            <Plus className="w-4 h-4" /> Add Kid
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderInfo = () => (
+    <div className="max-w-3xl mx-auto p-4">
+      <div className="bg-white rounded-xl shadow p-6 leading-relaxed">
+        <div className="text-xl font-bold mb-2">How Loop works</div>
+        <ul className="list-disc ml-6 space-y-1 text-gray-700">
+          <li>Pick a date at the top.</li>
+          <li>On the Board tab, tap a task to mark it complete for each kid.</li>
+          <li>Add more tasks or kids on the Manage tab.</li>
+          <li>See totals and estimated payout on the Reports tab.</li>
+        </ul>
+        <div className="mt-4 flex items-center gap-2 text-gray-600">
+          <DollarSign className="w-4 h-4" /> 1 point × cents-per-point = payout estimate.
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
+      {renderHeader()}
+      {renderTabs()}
+      {activeTab === "board" && renderBoard()}
+      {activeTab === "calendar" && renderCalendar()}
+      {activeTab === "reports" && renderReports()}
+      {activeTab === "manage" && renderManage()}
+      {activeTab === "info" && renderInfo()}
+    </div>
+  );
+};
 
 export default LoopApp;
