@@ -1,10 +1,15 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: ["./public/index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx,js,jsx}'],
   theme: {
     extend: {
-      colors: { loop: { green: "#9CAF88" } },
+      colors: {
+        loopGreen: '#9CAF88'
+      },
+      boxShadow: {
+        soft: '0 8px 30px rgba(0,0,0,0.06)'
+      }
     },
   },
   plugins: [],
-};
+}
