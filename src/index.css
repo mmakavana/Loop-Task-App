@@ -6,10 +6,10 @@
   --ring: theme(colors.primary);
 }
 
-/* Base typography: slightly larger & a touch darker (not bold) */
+/* Global font bump (+ ~3px), slightly darker (not bold) */
 body {
   @apply bg-surface text-ink;
-  @apply text-[17px]; /* small global bump (~+2px vs default 16px) */
+  @apply text-[19px]; /* global bump; was ~16px */
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
 }
 
@@ -26,13 +26,25 @@ body {
 /* Badges */
 .badge { @apply inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primaryMuted text-ink; }
 
-/* Inputs */
+/* Inputs (keep legible with larger base) */
 input, select, textarea {
   @apply border border-line rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-transparent bg-white;
-  @apply text-[16px]; /* keep forms legible with the new base size */
+  @apply text-[17px];
 }
 label { @apply text-sm text-muted; }
 
-/* Tabs */
-.tab { @apply px-3 py-2 text-muted border-b-2 border-transparent text-[15px]; }
-.tab-active { @apply border-primary text-ink; }
+/* Tabs: pill style (inactive gray, active sage+white bold) */
+.tabbar { @apply border-b border-line; }
+.tablist { @apply flex gap-3 flex-wrap; }
+.tab-pill {
+  @apply inline-flex items-center px-4 py-2 rounded-full bg-[#f5f5f5] text-[#111111]
+         border border-line;
+  font-weight: 500; /* not bold; just slightly heavier for legibility */
+}
+.tab-pill:hover { @apply border-primary; }
+.tab-pill-active {
+  @apply bg-primaryDeep text-white font-bold border-transparent;
+}
+
+/* Banner separator (kept for layout rhythm if needed) */
+.app-hr { @apply border-t border-line mt-3; }
