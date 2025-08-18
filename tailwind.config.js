@@ -4,17 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Opal / sage palette
-        primary: "#AAC4B8",       // Opal
-        primaryDeep: "#7FA898",   // Darker sage
-        primaryMuted: "#D9E6E0",  // Pale sage
+        // Sage / Opal palette
+        primary: "#AAC4B8",       // opal / sage
+        primaryDeep: "#7FA898",   // darker sage for banner/active
+        primaryMuted: "#D9E6E0",  // pale sage accents
+
         // Neutrals
-        surface: "#F3F7F5",       // App background
-        card: "#FFFFFF",
-        ink: "#1F2A2E",
-        muted: "#68757A",
-        line: "#E7ECEA",
-        // Accents
+        surface: "#F3F7F5",       // app background
+        card: "#FFFFFF",          // cards
+        ink: "#1F2A2E",           // default text
+        muted: "#5E6B70",         // secondary text
+        line: "#E7ECEA",          // dividers/borders
+
+        // Alerts
         danger: "#D14D4D",
       },
       boxShadow: {
