@@ -1,4 +1,28 @@
 import { STORAGE_KEY } from '../utils/constants'
-import { AppState } from './types'
-export function loadState():AppState|null{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw)return null; return JSON.parse(raw) as AppState }catch{return null} }
-let t:number|undefined; export function saveState(s:AppState){ try{ const d=JSON.stringify(s); if(t)window.clearTimeout(t); t=window.setTimeout(()=>localStorage.setItem(STORAGE_KEY,d),120)}catch{} }
+import type { AppState } from './types'
+import { CURRENT_VERSION } from './migrations'
+
+/** Load raw JSON (untyped). Migration happens elsewhere. */
+export function loadRaw(): any | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+let saveTimer: number | undefined
+
+/** Save with a small debounce; stamp current version. */
+export function saveState(state: AppState) {
+  try {
+    const payload = { ...state, schema: CURRENT_VERSION, _version: CURRENT_VERSION }
+    const json = JSON.stringify(payload)
+    if (saveTimer) window.clearTimeout(saveTimer)
+    saveTimer = window.setTimeout(() => localStorage.setItem(STORAGE_KEY, json), 120)
+  } catch {
+    // best-effort
+  }
+}
