@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { nanoid } from './util_nanoid'
-import { ALLOWED_EMOJI, DEFAULT_PIN, PIN_SESSION_MS } from '../utils/constants'
+import { ALLOWED_EMOJI, DEFAULT_PIN, PIN_SESSION_MS, DEFAULT_PAYOUT_MODE } from '../utils/constants'
 import { loadRaw, saveState } from './persistence'
 import type { AppState, Child, Task, Completion, Adjustment, Payout, ChildId, TaskId } from './types'
 import { toISODate } from '../utils/date'
@@ -10,14 +10,14 @@ import { migrate } from './migrations'
 function now() { return Date.now() }
 
 const initial: AppState = {
-  schema: 2,         // SCHEMA_VERSION
+  schema: 2,
   ready: false,
   children: [],
   tasks: [],
   completions: [],
   adjustments: [],
   payouts: [],
-  config: { moneyPerPoint: 0.1, pin: DEFAULT_PIN }
+  config: { moneyPerPoint: 0.1, pin: DEFAULT_PIN, payoutMode: DEFAULT_PAYOUT_MODE }
 }
 
 export const useStore = create<AppState & {
@@ -32,13 +32,15 @@ export const useStore = create<AppState & {
   toggleCompletion:(childId:ChildId, taskId:TaskId, dateISO:string)=>void
 
   addAdjustment:(a: Omit<Adjustment,'id'>)=>void
-  addPayout:(p: Omit<Payout,'id'| 'paidOnISO' | 'rateAtPayout'>)=>void
+  addPayout:(p: Omit<Payout,'id'|'paidOnISO'|'rateAtPayout'>)=>void
 
   setRate:(v:number)=>void
   setPIN:(pin:string, hint?:string, rq?:string, ra?:string)=>void
   unlockPIN:(pin:string)=>boolean
   forgotPIN:(answer:string, newPin:string)=>boolean
   relock:()=>void
+
+  setPayoutMode:(mode: 'all_done'|'per_task')=>void  // NEW
 
   importData:(raw:any)=>boolean
   exportData:()=>string
@@ -51,7 +53,8 @@ export const useStore = create<AppState & {
     const raw = loadRaw()
     if (raw) {
       const migrated = migrate(raw)
-      // Ensure ready is set here (migrate() sets ready: true but we override anyway)
+      // default payoutMode if missing
+      if (!migrated.config.payoutMode) migrated.config.payoutMode = DEFAULT_PAYOUT_MODE
       set({ ...migrated, ready: true })
       saveState({ ...migrated, ready: true })
     } else {
@@ -127,19 +130,23 @@ export const useStore = create<AppState & {
     return false
   },
 
+  setPayoutMode(mode){
+    set(s=> ({ config: { ...s.config, payoutMode: mode } })); saveState(get())
+  },
+
   // ----- Import / Export -----
   importData(raw){
     try{
       const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
       if(!obj || typeof obj !== 'object') return false
       const migrated = migrate(obj)
+      if (!migrated.config.payoutMode) migrated.config.payoutMode = DEFAULT_PAYOUT_MODE
       set({ ...migrated }); saveState(get()); return true
     }catch{ return false }
   },
   exportData(){ return JSON.stringify(get(), null, 2) },
 }) )
 
-// Persist every state change (debounced in saveState)
 useStore.subscribe((s)=>{ saveState(s as any) })
 
 export function isPinSessionValid(s: AppState){
