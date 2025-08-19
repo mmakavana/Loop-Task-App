@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore, isPinSessionValid } from '../store/useStore'
 import { toISODate } from '../utils/date'
-import { computeStreakAwards, dailyPointsFlexible, dailyPointsIfAllDone } from '../utils/points'
+import { computeStreakAwards, dailyPointsFlexible } from '../utils/points'
 
 function rangeDates(a:Date,b:Date){ const out:string[]=[]; for(let d=a; d<=b; d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)) out.push(toISODate(d)); return out }
 
@@ -20,26 +20,37 @@ export default function ReportsSummary(){
 
   const children = s.children.filter(c=> childFilter==='all' || c.id===childFilter)
   const mode = s.config.payoutMode ?? 'all_done'
+  const rewardType = s.config.rewardType ?? 'money'
 
   const rows = children.map(ch=>{
     const clip = clipSinceLastPayout(ch.id, start, end)
     const dates = rangeDates(new Date(clip.start+'T00:00:00'), new Date(clip.end+'T00:00:00'))
 
-    // base task points according to payout mode
     const taskPts = dates.reduce((sum,d)=> sum + dailyPointsFlexible(s, ch.id, d, mode), 0)
-
-    // streak bonuses still require ALL tasks for a day
     const streakAwards = computeStreakAwards(s, ch.id, dates)
     const streakPts = streakAwards.reduce((acc,a)=> acc + a.points, 0)
-
     const adjustments = s.adjustments
       .filter(a=> a.childId===ch.id && a.dateISO>=clip.start && a.dateISO<=clip.end)
       .reduce((acc,a)=> acc + a.deltaPoints, 0)
 
     const totalPts = taskPts + streakPts + adjustments
-    const value = totalPts * (s.config.moneyPerPoint ?? 0)
 
-    return { ch, taskPts, streakPts, adjustments, totalPts, value, clip }
+    // Compute "value" per reward type
+    let displayValue = ''
+    if (rewardType === 'money') {
+      const value = totalPts * (s.config.moneyPerPoint ?? 0)
+      displayValue = `$${value.toFixed(2)}`
+    } else if (rewardType === 'time') {
+      const minutes = totalPts * (s.config.minutesPerPoint ?? 0)
+      displayValue = `${minutes} min`
+    } else {
+      const name = (s.config.customRewardName || 'reward').trim()
+      const per = Math.max(1, s.config.pointsPerReward ?? 1)
+      const count = Math.floor(totalPts / per)
+      displayValue = `${count} ${name}${count===1?'':'s'}`
+    }
+
+    return { ch, taskPts, streakPts, adjustments, totalPts, displayValue, clip }
   })
 
   return (
@@ -54,11 +65,22 @@ export default function ReportsSummary(){
             {s.children.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div className="ml-auto">
-          <label>Rate ($/pt)</label>
-          <input type="number" step="0.01" min="0" value={s.config.moneyPerPoint}
-            onChange={e=>useStore.getState().setRate(parseFloat(e.target.value||'0'))}/>
-        </div>
+
+        {/* Rate controls show contextually */}
+        { (rewardType === 'money') && (
+          <div className="ml-auto">
+            <label>Rate ($/pt)</label>
+            <input type="number" step="0.01" min="0" value={s.config.moneyPerPoint}
+              onChange={e=>useStore.getState().setRate(parseFloat(e.target.value||'0'))}/>
+          </div>
+        )}
+        { (rewardType === 'time') && (
+          <div className="ml-auto">
+            <label>Minutes / pt</label>
+            <input type="number" step="1" min="0" value={s.config.minutesPerPoint ?? 0}
+              onChange={e=>useStore.getState().setMinutesPerPoint(parseInt(e.target.value||'0'))}/>
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -82,7 +104,7 @@ export default function ReportsSummary(){
                 <td className="p-2">{r.adjustments}</td>
                 <td className="p-2">{r.streakPts}</td>
                 <td className="p-2 font-semibold">{r.totalPts}</td>
-                <td className="p-2 font-semibold">${r.value.toFixed(2)}</td>
+                <td className="p-2 font-semibold">{r.displayValue}</td>
                 <td className="p-2">
                   <button
                     className="btn-outline"
@@ -97,7 +119,7 @@ export default function ReportsSummary(){
                         rangeStartISO: r.clip.start,
                         rangeEndISO: r.clip.end,
                         points: r.totalPts,
-                        value: r.value,
+                        value: 0, // value meaning depends on reward type; points are the source of truth
                         note
                       })
                       alert('Payout recorded. Summary totals will zero forward; logs remain visible.')
@@ -113,9 +135,10 @@ export default function ReportsSummary(){
         </table>
       </div>
 
-      {/* Mode indicator */}
       <div className="text-xs text-muted">
         Payout mode: <b>{(s.config.payoutMode ?? 'all_done') === 'all_done' ? 'All Tasks Complete' : 'Per Task Completed'}</b>
+        {' • '}
+        Reward type: <b>{rewardType === 'money' ? 'Money' : rewardType === 'time' ? 'Screen Time' : 'Custom Reward'}</b>
       </div>
     </div>
   )
