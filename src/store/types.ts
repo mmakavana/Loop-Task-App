@@ -1,4 +1,4 @@
-import { Weekday, PayoutMode } from '../utils/constants'
+import { Weekday, PayoutMode, RewardType } from '../utils/constants'
 
 export type ChildId = string
 export type TaskId = string
@@ -16,13 +16,24 @@ export interface Payout {
 }
 
 export interface Config {
+  // money mode
   moneyPerPoint: number
+
+  // PIN
   pin: string
   pinHint?: string
   recoveryQ?: string
   recoveryA?: string
   pinUnlockedAt?: number
-  payoutMode?: PayoutMode    // NEW
+
+  // payout aggregation
+  payoutMode?: PayoutMode
+
+  // NEW: reward type
+  rewardType?: RewardType
+  minutesPerPoint?: number        // for time mode
+  customRewardName?: string       // for custom mode
+  pointsPerReward?: number        // for custom mode
 }
 
 export interface AppState {
