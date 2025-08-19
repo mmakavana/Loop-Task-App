@@ -11,7 +11,7 @@ export default function ManagePage(){ return (<PinGate><ManageInner/></PinGate>)
 function ManageInner(){
   const s=useStore()
   const [pin,setPin]=useState(s.config.pin||'1234')
-  const [showPin,setShowPin]=useState(false)     // 👁️ toggle
+  const [showPin,setShowPin]=useState(false)
   const [hint,setHint]=useState(s.config.pinHint||'')
   const [rq,setRq]=useState(s.config.recoveryQ||'Recovery question')
   const [ra,setRa]=useState(s.config.recoveryA||'')
@@ -44,10 +44,8 @@ function ManageInner(){
   return (
     <div className="grid lg:grid-cols-2 gap-4">
       <div className="space-y-4">
-        {/* Add child */}
         <ChildForm/>
 
-        {/* Edit child (inline panel appears when selected) */}
         {editingChild && (
           <div className="card space-y-3">
             <h3 className="font-semibold">Edit Child</h3>
@@ -68,7 +66,6 @@ function ManageInner(){
           </div>
         )}
 
-        {/* Add / Edit tasks */}
         {!editingTask && <TaskForm/>}
         {editingTask && (
           <TaskForm
@@ -85,7 +82,6 @@ function ManageInner(){
       </div>
 
       <div className="space-y-4">
-        {/* Children list with Edit/Delete */}
         <div className="card">
           <h3 className="font-semibold mb-2">Children</h3>
           <ul className="divide-y divide-line">
@@ -108,7 +104,6 @@ function ManageInner(){
           </ul>
         </div>
 
-        {/* Tasks list with Edit/Delete (unchanged behavior) */}
         <div className="card">
           <h3 className="font-semibold mb-3">Tasks</h3>
           <ul className="divide-y divide-line">
@@ -136,23 +131,69 @@ function ManageInner(){
           {s.tasks.length===0 && <p className="text-sm text-muted">No tasks yet.</p>}
         </div>
 
-        {/* Settings (PIN eye toggle + payout/rate) */}
+        {/* Settings (rate/payout mode + NEW reward type) */}
         <div className="card space-y-3">
           <h3 className="font-semibold">Settings</h3>
 
-          {/* Rate */}
+          {/* Reward type toggle */}
           <div>
-            <label>Money conversion ($ per point)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={s.config.moneyPerPoint}
-              onChange={e=>useStore.getState().setRate(parseFloat(e.target.value||'0'))}
-            />
+            <label>Reward Type</label>
+            <select
+              className="mt-1"
+              value={s.config.rewardType ?? 'money'}
+              onChange={e=>useStore.getState().setRewardType(e.target.value as any)}
+            >
+              <option value="money">Money</option>
+              <option value="time">Screen Time</option>
+              <option value="custom">Custom Reward</option>
+            </select>
           </div>
 
-          {/* Payout mode */}
+          {/* Dynamic fields based on reward type */}
+          {(s.config.rewardType ?? 'money') === 'money' && (
+            <div>
+              <label>$ per point</label>
+              <input
+                type="number" min="0" step="0.01"
+                value={s.config.moneyPerPoint}
+                onChange={e=>useStore.getState().setRate(parseFloat(e.target.value||'0'))}
+              />
+            </div>
+          )}
+
+          {(s.config.rewardType ?? 'money') === 'time' && (
+            <div>
+              <label>Minutes per point</label>
+              <input
+                type="number" min="0" step="1"
+                value={s.config.minutesPerPoint ?? 0}
+                onChange={e=>useStore.getState().setMinutesPerPoint(parseInt(e.target.value||'0'))}
+              />
+            </div>
+          )}
+
+          {(s.config.rewardType ?? 'money') === 'custom' && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label>Reward name (singular)</label>
+                <input
+                  placeholder="e.g., candy, story"
+                  value={s.config.customRewardName ?? ''}
+                  onChange={e=>useStore.getState().setCustomReward(e.target.value, s.config.pointsPerReward ?? 1)}
+                />
+              </div>
+              <div>
+                <label>Points per reward</label>
+                <input
+                  type="number" min="1" step="1"
+                  value={s.config.pointsPerReward ?? 1}
+                  onChange={e=>useStore.getState().setCustomReward(s.config.customRewardName ?? '', parseInt(e.target.value||'1'))}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Payout aggregation mode (unchanged) */}
           <div>
             <label>Payout mode</label>
             <div className="mt-1 flex flex-col gap-2">
@@ -177,7 +218,7 @@ function ManageInner(){
             </div>
           </div>
 
-          {/* PIN + recovery (with visibility toggle) */}
+          {/* PIN + recovery with visibility toggle */}
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="relative">
               <label>PIN</label>
