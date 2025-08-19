@@ -7,7 +7,7 @@ export function EmojiPicker({
   value?: string
   onChange: (v: string) => void
 }) {
-  // Renders ONLY from ALLOWED_EMOJI to prevent any stray/yellow faces.
+  // Only render from ALLOWED_EMOJI so no stray/yellow faces can appear.
   return (
     <div className="grid grid-cols-8 gap-2">
       {ALLOWED_EMOJI.map((e) => (
