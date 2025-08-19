@@ -7,11 +7,25 @@ export const SCHEMA_VERSION = 2  // bump when storage shape changes
 export const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as const
 export type Weekday = typeof WEEKDAYS[number]
 
-/** ✅ Approved avatars only: light‑skin, dark‑hair kids + animals. No yellow faces. */
-export const ALLOWED_HUMAN = ['👧🏻','👦🏻','🧒🏻'] as const
-export const ALLOWED_ANIMALS = [
-  '🐶','🐱','🐰','🐻','🐼','🦊','🐨','🦁','🐯','🐸','🐵','🐧','🐮','🐷','🦄'
+/** ✅ Approved avatars only (no yellow blanks). */
+export const ALLOWED_HUMAN = [
+  // Light skin, dark hair
+  '👧🏻', // girl, light skin
+  '👦🏻', // boy, light skin
+  // Light skin, blonde hair
+  '👱🏻‍♀️', // blonde girl, light skin
+  '👱🏻‍♂️', // blonde boy, light skin
+  // Dark skin, dark hair
+  '👧🏾', // girl, dark skin
+  '👦🏾', // boy, dark skin
 ] as const
+
+export const ALLOWED_ANIMALS = [
+  '🐶','🐱','🐰','🐻','🐼','🦊','🐨','🦁','🐯','🐸','🐵','🐧','🐮','🐷','🦄',
+  // New cute options
+  '🐠','🐥','🐢','🐙','🦋','🐞','🐝'
+] as const
+
 export const ALLOWED_EMOJI = [...ALLOWED_HUMAN, ...ALLOWED_ANIMALS] as const
 
 export const DEFAULT_PIN = '1234'
