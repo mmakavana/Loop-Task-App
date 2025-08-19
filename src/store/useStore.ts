@@ -1,13 +1,24 @@
 import { create } from 'zustand'
 import { nanoid } from './util_nanoid'
-import { ALLOWED_EMOJI, DEFAULT_PIN, PIN_SESSION_MS, DEFAULT_PAYOUT_MODE } from '../utils/constants'
+import {
+  ALLOWED_EMOJI,
+  DEFAULT_PIN,
+  PIN_SESSION_MS,
+  DEFAULT_PAYOUT_MODE,
+  DEFAULT_REWARD_TYPE,
+  DEFAULT_MONEY_PER_POINT,
+  DEFAULT_MINUTES_PER_POINT,
+  DEFAULT_CUSTOM_NAME,
+  DEFAULT_POINTS_PER_REWARD,
+} from '../utils/constants'
 import { loadRaw, saveState } from './persistence'
-import type { AppState, Child, Task, Completion, Adjustment, Payout, ChildId, TaskId } from './types'
+import type {
+  AppState, Child, Task, Completion, Adjustment, Payout, ChildId, TaskId
+} from './types'
 import { toISODate } from '../utils/date'
 import { migrate } from './migrations'
 
-// Utility
-function now() { return Date.now() }
+function now(){ return Date.now() }
 
 const initial: AppState = {
   schema: 2,
@@ -17,7 +28,17 @@ const initial: AppState = {
   completions: [],
   adjustments: [],
   payouts: [],
-  config: { moneyPerPoint: 0.1, pin: DEFAULT_PIN, payoutMode: DEFAULT_PAYOUT_MODE }
+  config: {
+    // defaults for all modes
+    moneyPerPoint: DEFAULT_MONEY_PER_POINT,
+    pin: DEFAULT_PIN,
+    payoutMode: DEFAULT_PAYOUT_MODE,
+
+    rewardType: DEFAULT_REWARD_TYPE,
+    minutesPerPoint: DEFAULT_MINUTES_PER_POINT,
+    customRewardName: DEFAULT_CUSTOM_NAME,
+    pointsPerReward: DEFAULT_POINTS_PER_REWARD,
+  }
 }
 
 export const useStore = create<AppState & {
@@ -40,7 +61,12 @@ export const useStore = create<AppState & {
   forgotPIN:(answer:string, newPin:string)=>boolean
   relock:()=>void
 
-  setPayoutMode:(mode: 'all_done'|'per_task')=>void  // NEW
+  setPayoutMode:(mode: 'all_done'|'per_task')=>void
+
+  // NEW: reward type setters
+  setRewardType:(t: 'money'|'time'|'custom')=>void
+  setMinutesPerPoint:(m:number)=>void
+  setCustomReward:(name:string, pointsPerReward:number)=>void
 
   importData:(raw:any)=>boolean
   exportData:()=>string
@@ -53,8 +79,15 @@ export const useStore = create<AppState & {
     const raw = loadRaw()
     if (raw) {
       const migrated = migrate(raw)
-      // default payoutMode if missing
-      if (!migrated.config.payoutMode) migrated.config.payoutMode = DEFAULT_PAYOUT_MODE
+
+      // ensure new fields have defaults
+      migrated.config.rewardType ??= DEFAULT_REWARD_TYPE
+      migrated.config.minutesPerPoint ??= DEFAULT_MINUTES_PER_POINT
+      migrated.config.customRewardName ??= DEFAULT_CUSTOM_NAME
+      migrated.config.pointsPerReward ??= DEFAULT_POINTS_PER_REWARD
+      migrated.config.moneyPerPoint ??= DEFAULT_MONEY_PER_POINT
+      migrated.config.payoutMode ??= DEFAULT_PAYOUT_MODE
+
       set({ ...migrated, ready: true })
       saveState({ ...migrated, ready: true })
     } else {
@@ -129,9 +162,19 @@ export const useStore = create<AppState & {
     }
     return false
   },
-
   setPayoutMode(mode){
     set(s=> ({ config: { ...s.config, payoutMode: mode } })); saveState(get())
+  },
+
+  // NEW reward-type setters
+  setRewardType(t){
+    set(s=> ({ config: { ...s.config, rewardType: t } })); saveState(get())
+  },
+  setMinutesPerPoint(m){
+    set(s=> ({ config: { ...s.config, minutesPerPoint: m } })); saveState(get())
+  },
+  setCustomReward(name, pointsPerReward){
+    set(s=> ({ config: { ...s.config, customRewardName: name, pointsPerReward } })); saveState(get())
   },
 
   // ----- Import / Export -----
@@ -140,7 +183,12 @@ export const useStore = create<AppState & {
       const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
       if(!obj || typeof obj !== 'object') return false
       const migrated = migrate(obj)
-      if (!migrated.config.payoutMode) migrated.config.payoutMode = DEFAULT_PAYOUT_MODE
+      migrated.config.rewardType ??= DEFAULT_REWARD_TYPE
+      migrated.config.minutesPerPoint ??= DEFAULT_MINUTES_PER_POINT
+      migrated.config.customRewardName ??= DEFAULT_CUSTOM_NAME
+      migrated.config.pointsPerReward ??= DEFAULT_POINTS_PER_REWARD
+      migrated.config.moneyPerPoint ??= DEFAULT_MONEY_PER_POINT
+      migrated.config.payoutMode ??= DEFAULT_PAYOUT_MODE
       set({ ...migrated }); saveState(get()); return true
     }catch{ return false }
   },
