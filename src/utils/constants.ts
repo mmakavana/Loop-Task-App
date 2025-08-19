@@ -9,20 +9,13 @@ export type Weekday = typeof WEEKDAYS[number]
 
 /** ✅ Approved avatars only (no yellow blanks). */
 export const ALLOWED_HUMAN = [
-  // Light skin, dark hair
-  '👧🏻', // girl, light skin
-  '👦🏻', // boy, light skin
-  // Light skin, blonde hair
-  '👱🏻‍♀️', // blonde girl, light skin
-  '👱🏻‍♂️', // blonde boy, light skin
-  // Dark skin, dark hair
-  '👧🏾', // girl, dark skin
-  '👦🏾', // boy, dark skin
+  '👧🏻','👦🏻',        // light skin, dark hair (girl/boy)
+  '👱🏻‍♀️','👱🏻‍♂️',  // light skin, blonde (girl/boy)
+  '👧🏾','👦🏾',        // dark skin, dark hair (girl/boy)
 ] as const
 
 export const ALLOWED_ANIMALS = [
   '🐶','🐱','🐰','🐻','🐼','🦊','🐨','🦁','🐯','🐸','🐵','🐧','🐮','🐷','🦄',
-  // New cute options
   '🐠','🐥','🐢','🐙','🦋','🐞','🐝'
 ] as const
 
@@ -36,3 +29,13 @@ export const STREAK_BONUS = 10
 
 export type PayoutMode = 'all_done' | 'per_task'
 export const DEFAULT_PAYOUT_MODE: PayoutMode = 'all_done'
+
+/** NEW: Reward types for “Value” in Reports */
+export type RewardType = 'money' | 'time' | 'custom'
+export const DEFAULT_REWARD_TYPE: RewardType = 'money'
+
+// defaults for each mode
+export const DEFAULT_MONEY_PER_POINT = 0.10        // $/pt
+export const DEFAULT_MINUTES_PER_POINT = 5         // minutes/pt
+export const DEFAULT_CUSTOM_NAME = 'reward'        // label for custom reward
+export const DEFAULT_POINTS_PER_REWARD = 10        // pts → 1 reward
